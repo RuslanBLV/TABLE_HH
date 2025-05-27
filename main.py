@@ -1,28 +1,19 @@
-from src.hh_api import DBManager
+from src.hh_api import create_table, create_base, interface
+from src.hh_vacansy import list_name_company, list_name
 
 
-def interface():
-    print("Основные команды:\nПолучить список всех компаний и количество вакансий у каждой компании - 1\n"
-          "Получить список всех вакансий с указанием названия компании, названия вакансии и зарплаты и "
-          "ссылки на вакансию - 2\nПолучить среднюю зарплату по вакансиям - 3\nПолучить список всех вакансий, "
-          "у которых зарплата выше средней по всем вакансиям - 4\nПолучить список всех вакансий, в названии "
-          "которых содержатся переданные в метод слова - 5")
-    user_word = int(input("Введите цифру: "))
-    if user_word == 1:
-        user_result = DBManager()
-        return user_result.get_companies_and_vacancies_count()
-    elif user_word == 2:
-        user_result = DBManager()
-        return user_result.get_all_vacancies()
-    elif user_word == 3:
-        user_result = DBManager()
-        return user_result.get_avg_salary()
-    elif user_word == 4:
-        user_result = DBManager()
-        return user_result.get_vacancies_with_higher_salary()
-    elif user_word == 5:
-        user_result = DBManager()
-        return user_result.get_vacancies_with_keyword()
+def main():
+    base = create_base()
+    print(base)
+    table = create_table()
+    print(table)
+    name_company = list_name_company
+    print(name_company)
+    name_vacancies = list_name
+    print(name_vacancies)
+    user_choice_result = interface()
+    return user_choice_result
 
 
-print(interface())
+if __name__ == '__main__':
+    print(main())

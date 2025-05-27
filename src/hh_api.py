@@ -1,45 +1,85 @@
 import psycopg2
 from typing import List, Tuple, Union
 from src.hh_vacansy import (result_list_vacancies, result_list_employees)
+from dotenv import load_dotenv
+import os
 
-conn = psycopg2.connect(
-    host='localhost',
-    database='test',
-    user='postgres',
-    password='12345',
-    options='-c client_encoding=UTF8'
-)
-cur = conn.cursor()
+load_dotenv()
 
-cur.execute(f"""
-    DROP TABLE vacancies;
-    CREATE TABLE vacancies (
-        vacancies_id SERIAL PRIMARY KEY,
-        vacancies VARCHAR(255),
-        salary int,
-        currency VARCHAR,
-        url VARCHAR
-    );
-""")
-cur.execute(f"""
-    DROP TABLE employees;
-    CREATE TABLE employees (
-        employees_id SERIAL PRIMARY KEY,
-        company VARCHAR
-    );
-""")
-conn.commit()
+
+def create_base():
+    conn = psycopg2.connect(
+        host=os.getenv('host'),
+        database=os.getenv('database'),
+        user=os.getenv('user'),
+        password=os.getenv('password')
+    )
+    cur = conn.cursor()
+
+    cur.execute(f"""
+        DROP TABLE employees CASCADE;
+        CREATE TABLE employees (
+            employees_id SERIAL PRIMARY KEY,
+            company VARCHAR
+        );
+    """)
+
+    cur.execute(f"""
+        DROP TABLE vacancies;
+        CREATE TABLE vacancies (
+            vacancies_id SERIAL PRIMARY KEY,
+            description VARCHAR(255),
+            salary int,
+            currency VARCHAR,
+            url VARCHAR,
+            employees_id INT,
+            FOREIGN KEY (employees_id) REFERENCES employees (employees_id)
+        );
+    """)
+    return "Таблица создана"
+
+
+def create_table():
+    conn = psycopg2.connect(
+        host=os.getenv('host'),
+        database=os.getenv('database'),
+        user=os.getenv('user'),
+        password=os.getenv('password')
+    )
+
+    with conn.cursor() as cursor:
+        cursor.execute(f"""
+                DROP TABLE employees CASCADE;
+                CREATE TABLE employees (
+                    employees_id SERIAL PRIMARY KEY,
+                    company VARCHAR
+                );
+            """)
+        cursor.execute(f"""
+                DROP TABLE vacancies;
+                CREATE TABLE vacancies (
+                    vacancies_id SERIAL PRIMARY KEY,
+                    description VARCHAR(255),
+                    salary int,
+                    currency VARCHAR,
+                    url VARCHAR,
+                    employees_id INT,
+                    FOREIGN KEY (employees_id) REFERENCES employees (employees_id)
+                );
+            """)
+        cursor.executemany("INSERT INTO employees (employees_id, company) VALUES (%s, %s)", result_list_employees)
+        cursor.executemany("INSERT INTO vacancies (vacancies_id, description, salary, currency, url, employees_id) "
+                           "VALUES (%s, %s, %s, %s, %s, %s)", result_list_vacancies)
+        conn.commit()
+
+    conn.commit()
+    return "В таблицу внесены данные"
 
 
 class DBManager:
-    with conn.cursor() as cursor:
-        cursor.executemany("INSERT INTO employees (employees_id, company) VALUES (%s, %s)", result_list_employees)
-        cursor.execute("ALTER TABLE vacancies ADD COLUMN employees_id INTEGER REFERENCES employees(employees_id)")
-        cursor.executemany("INSERT INTO vacancies (vacancies_id, vacancies, salary, currency, url, employees_id) "
-                               "VALUES (%s, %s, %s, %s, %s, %s)", result_list_vacancies)
-        conn.commit()
 
-    def __init__(self, host='localhost', database='test', user='postgres', password='12345'):
+    def __init__(self, host=os.getenv('host'), database=os.getenv('database'), user=os.getenv('user'),
+                 password=os.getenv('password')):
         self.conn = psycopg2.connect(
             host=host,
             database=database,
@@ -51,7 +91,7 @@ class DBManager:
         # получает список всех вакансий с указанием названия компании,
         # названия вакансии и зарплаты и ссылки на вакансию.
         with self.conn.cursor() as cursor:
-            cursor.execute("SELECT vacancies.vacancies_id, vacancies.vacancies, vacancies.salary, vacancies.currency,"
+            cursor.execute("SELECT vacancies.vacancies_id, vacancies.description, vacancies.salary, vacancies.currency,"
                            " vacancies.url, employees.company AS company FROM vacancies JOIN employees "
                            "ON vacancies.employees_id = employees.employees_id;")
             rows = cursor.fetchall()
@@ -87,8 +127,62 @@ class DBManager:
         #  получает список всех вакансий, в названии которых содержатся переданные в метод слова
         keyword = input("Введите название вакансии для поиска: ")
         with self.conn.cursor() as cursor:
-            cursor.execute(f"SELECT * FROM vacancies WHERE vacancies LIKE '{keyword}%'")
+            cursor.execute(f"SELECT * FROM vacancies WHERE description LIKE '{keyword}%'")
             self.conn.commit()
             rows = cursor.fetchall()
             return rows
+
+
+def interface():
+    print("Основные команды:\nПолучить список всех компаний и количество вакансий у каждой компании - 1\n"
+          "Получить список всех вакансий с указанием названия компании, названия вакансии и зарплаты и "
+          "ссылки на вакансию - 2\nПолучить среднюю зарплату по вакансиям - 3\nПолучить список всех вакансий, "
+          "у которых зарплата выше средней по всем вакансиям - 4\nПолучить список всех вакансий, в названии "
+          "которых содержатся переданные в метод слова - 5")
+    user_word = int(input("Введите цифру: "))
+    if user_word == 1:
+        user_result = DBManager()
+        data = user_result.get_companies_and_vacancies_count()
+        for i in data:
+            print(f"Компания: {i[0]}")
+            print(f"Количество вакансий: {i[1]}\n")
+        return "Конец"
+    elif user_word == 2:
+        user_result = DBManager()
+        data = user_result.get_all_vacancies()
+        for i in data:
+            print(f"ID вакансии: {i[0]}")
+            print(f"Описание: {i[1]}")
+            print(f"Зарплата: {i[2]}")
+            print(f"Ссылка: {i[4]}")
+            print(f"Компания: {i[5]}\n")
+        return "Конец"
+    elif user_word == 3:
+        user_result = DBManager()
+        data = user_result.get_avg_salary()
+        for i in data:
+            print(f"Средняя зарплата вакансий: {i[0]}")
+        return "Конец"
+    elif user_word == 4:
+        user_result = DBManager()
+        data = user_result.get_vacancies_with_higher_salary()
+        for i in data:
+            print(f"ID вакансии: {i[0]}")
+            print(f"Описание: {i[1]}")
+            print(f"Зарплата: {i[2]}")
+            print(f"Валюта: {i[3]}")
+            print(f"Ссылка: {i[4]}")
+            print(f"ID Компании: {i[5]}\n")
+        return "Конец"
+    elif user_word == 5:
+        user_result = DBManager()
+        data = user_result.get_vacancies_with_keyword()
+        for i in data:
+            print(f"ID вакансии: {i[0]}")
+            print(f"Описание: {i[1]}")
+            print(f"Зарплата: {i[2]}")
+            print(f"Валюта: {i[3]}")
+            print(f"Ссылка: {i[4]}")
+            print(f"ID Компании: {i[5]}\n")
+        return "Конец"
 
