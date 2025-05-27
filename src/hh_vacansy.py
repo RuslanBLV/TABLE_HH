@@ -164,3 +164,4 @@ result_list_vacancies = list(zip(list_id, list_name, list_salary, list_currency,
 result_list_employees = list(zip(list_id_company, list_name_company))
 
 
+
