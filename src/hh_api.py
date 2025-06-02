@@ -1,13 +1,42 @@
 import psycopg2
 from typing import List, Tuple, Union
-from src.hh_vacansy import (result_list_vacancies, result_list_employees)
+from src.hh_vacansy import api_vacancies, api_employees
 from dotenv import load_dotenv
 import os
+import sqlite3
 
 load_dotenv()
 
 
-def create_base():
+def recreate_database_postgres():
+    dbname = os.getenv('database')
+    user = os.getenv('user')
+    password = os.getenv('password')
+    host = os.getenv('host')
+
+
+    conn = psycopg2.connect(
+        host=host,
+        database="postgres",
+        user=user,
+        password=password
+    )
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    try:
+        cur.execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}';")
+        cur.execute(f"DROP DATABASE IF EXISTS {dbname};")
+    except Exception as ex:
+        print(f"Ошибка при удалении базы: {ex}")
+
+    cur.execute(f"CREATE DATABASE {dbname};")
+    cur.close()
+    conn.close()
+    return f"База данных {dbname} успешно пересоздана."
+
+
+def create_table():
     conn = psycopg2.connect(
         host=os.getenv('host'),
         database=os.getenv('database'),
@@ -17,7 +46,6 @@ def create_base():
     cur = conn.cursor()
 
     cur.execute(f"""
-        DROP TABLE employees CASCADE;
         CREATE TABLE employees (
             employees_id SERIAL PRIMARY KEY,
             company VARCHAR
@@ -25,7 +53,6 @@ def create_base():
     """)
 
     cur.execute(f"""
-        DROP TABLE vacancies;
         CREATE TABLE vacancies (
             vacancies_id SERIAL PRIMARY KEY,
             description VARCHAR(255),
@@ -39,7 +66,7 @@ def create_base():
     return "Таблица создана"
 
 
-def create_table():
+def info_table():
     conn = psycopg2.connect(
         host=os.getenv('host'),
         database=os.getenv('database'),
@@ -48,15 +75,15 @@ def create_table():
     )
 
     with conn.cursor() as cursor:
+        vacancies = api_vacancies()
+        employees = api_employees()
         cursor.execute(f"""
-                DROP TABLE employees CASCADE;
                 CREATE TABLE employees (
                     employees_id SERIAL PRIMARY KEY,
                     company VARCHAR
                 );
             """)
         cursor.execute(f"""
-                DROP TABLE vacancies;
                 CREATE TABLE vacancies (
                     vacancies_id SERIAL PRIMARY KEY,
                     description VARCHAR(255),
@@ -67,9 +94,9 @@ def create_table():
                     FOREIGN KEY (employees_id) REFERENCES employees (employees_id)
                 );
             """)
-        cursor.executemany("INSERT INTO employees (employees_id, company) VALUES (%s, %s)", result_list_employees)
+        cursor.executemany("INSERT INTO employees (employees_id, company) VALUES (%s, %s)", employees)
         cursor.executemany("INSERT INTO vacancies (vacancies_id, description, salary, currency, url, employees_id) "
-                           "VALUES (%s, %s, %s, %s, %s, %s)", result_list_vacancies)
+                           "VALUES (%s, %s, %s, %s, %s, %s)", vacancies)
         conn.commit()
 
     conn.commit()
@@ -127,7 +154,7 @@ class DBManager:
         #  получает список всех вакансий, в названии которых содержатся переданные в метод слова
         keyword = input("Введите название вакансии для поиска: ")
         with self.conn.cursor() as cursor:
-            cursor.execute(f"SELECT * FROM vacancies WHERE description LIKE '{keyword}%'")
+            cursor.execute(f"SELECT * FROM vacancies WHERE description LIKE '%{keyword}%'")
             self.conn.commit()
             rows = cursor.fetchall()
             return rows

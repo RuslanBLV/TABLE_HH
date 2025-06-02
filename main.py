@@ -1,18 +1,14 @@
-from src.hh_api import create_table, create_base, interface
-from src.hh_vacansy import list_name_company, list_name
+from src.hh_api import create_table, interface, recreate_database_postgres, info_table
+from src.hh_vacansy import all_id
+from src.hh_file import interface
 
 
 def main():
-    base = create_base()
-    print(base)
-    table = create_table()
-    print(table)
-    name_company = list_name_company
-    print(name_company)
-    name_vacancies = list_name
-    print(name_vacancies)
-    user_choice_result = interface()
-    return user_choice_result
+    print(f"id компаний: {all_id()}")
+    print(recreate_database_postgres())
+    print(create_table())
+    print(info_table())
+    print(interface())
 
 
 if __name__ == '__main__':
